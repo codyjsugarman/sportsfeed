@@ -6,49 +6,88 @@
 
 import UIKit
 import MapKit
+import FirebaseAuth
+import FirebaseDatabase
 
 class ProfileViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UITextFieldDelegate, MKMapViewDelegate, CLLocationManagerDelegate {
     
     var teamData = [scheduleObject]()
+    
+    private lazy var channelRef: FIRDatabaseReference = FIRDatabase.database().reference().child("channels")
+    private var channelRefHandle: FIRDatabaseHandle?
+    
+    // MARK: Properties
+    var senderDisplayName: String? // 1
+    var newChannelTextField: UITextField? // 2
+//    private var channels: [Channel] = [] // 3
+    
+    private var channels = [Channel(id: "TEST", name: "CODY")]
+    
+    enum Section: Int {
+        case createNewChannelSection = 0
+        case currentChannelsSection
+    }
+    
+    deinit {
+        if let refHandle = channelRefHandle {
+            channelRef.removeObserver(withHandle: refHandle)
+        }
+    }
+    
+    private func observeChannels() {
+        // Use the observe method to listen for new
+        // channels being written to the Firebase DB
+        channelRefHandle = channelRef.observe(.childAdded, with: { (snapshot) -> Void in // 1
+            let channelData = snapshot.value as! Dictionary<String, AnyObject> // 2
+            let id = snapshot.key
+            if let name = channelData["name"] as! String!, name.characters.count > 0 { // 3
+                self.channels.append(Channel(id: id, name: name))
+            } else {
+                print("Error! Could not decode channel data")
+            }
+        })
+    }
+
     
     struct scheduleObject {
         var teamName: String
         var weekNumber: String
         var score: String
         var logoName: String
-        var date: NSDate
+        var date: Date
         
     }
 
-    @IBAction func addPicture(sender: AnyObject) {
-        performSegueWithIdentifier("takePicture", sender: self)
+    @IBAction func addPicture(_ sender: AnyObject) {
+        performSegue(withIdentifier: "takePicture", sender: self)
         
     }
     
 
-    private let locationManager = CLLocationManager()
-    private var currentLocation: CLLocation?
+    fileprivate let locationManager = CLLocationManager()
+    fileprivate var currentLocation: CLLocation?
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        observeChannels()
         self.automaticallyAdjustsScrollViewInsets = false
         textField.delegate = self
         sportsTeam.text = sportsTeamName
-        teamImage.image = UIImage(named: sportsID!.lowercaseString)
+        teamImage.image = UIImage(named: sportsID!.lowercased())
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
-        if CLLocationManager.authorizationStatus() == .NotDetermined {
+        if CLLocationManager.authorizationStatus() == .notDetermined {
             locationManager.requestWhenInUseAuthorization()
         }
         
         locationManager.startUpdatingLocation()
-        let defaults = NSUserDefaults.standardUserDefaults()
-        if let obj = defaults.objectForKey("favorites"){
+        let defaults = UserDefaults.standard
+        if let obj = defaults.object(forKey: "favorites"){
             let favorites = obj as! [NSObject]
-            if favorites.contains(sportsTeamName!){
+            if favorites.contains(sportsTeamName! as NSObject){
                 self.navigationItem.rightBarButtonItem?.title = "Added"
-                self.navigationItem.rightBarButtonItem?.enabled = false
-                self.navigationItem.rightBarButtonItem?.tintColor = UIColor.grayColor()
+                self.navigationItem.rightBarButtonItem?.isEnabled = false
+                self.navigationItem.rightBarButtonItem?.tintColor = UIColor.gray
             }
         }
     }
@@ -56,7 +95,7 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     @IBOutlet weak var teamImage: UIImageView!
  
     
-    func locationManager(manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         currentLocation = manager.location
         
         
@@ -71,17 +110,17 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
         locationManager.stopUpdatingLocation()
         
         let polyline = MKPolyline(coordinates: &coordinateArray, count: coordinateArray.count)
-        mapView.addOverlay(polyline)
+        mapView.add(polyline)
         
         let region = polyline.boundingMapRect
         mapView.setRegion(MKCoordinateRegionForMapRect(region), animated: true)
         
     }
     
-    func mapView(mapView: MKMapView, rendererForOverlay overlay: MKOverlay) -> MKOverlayRenderer {
+    func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
         if overlay is MKPolyline {
             let polylineRenderer = MKPolylineRenderer(overlay: overlay)
-            polylineRenderer.strokeColor = UIColor.redColor()
+            polylineRenderer.strokeColor = UIColor.red
             polylineRenderer.lineWidth = 3
             return polylineRenderer
         }
@@ -95,8 +134,8 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
         }
     }
     
-    func mapView(mapView: MKMapView, viewForAnnotation annotation: MKAnnotation) -> MKAnnotationView? {
-        if let mView = mapView.dequeueReusableAnnotationViewWithIdentifier("location") {
+    func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+        if let mView = mapView.dequeueReusableAnnotationView(withIdentifier: "location") {
             mView.annotation = annotation
             return mView
         } else {
@@ -107,22 +146,22 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     }
     
     
-    func textFieldShouldReturn(textField: UITextField) -> Bool {
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         textField.resignFirstResponder()
-        let formatter = NSDateFormatter()
-        formatter.dateStyle = .ShortStyle
-        if let date = formatter.dateFromString(textField.text!) {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        if let date = formatter.date(from: textField.text!) {
              let index = findClosestDate(date)
-             let path = NSIndexPath(forItem: index, inSection: 0)
-             teamSchedule.scrollToItemAtIndexPath(path, atScrollPosition: .CenteredHorizontally, animated: true)
+             let path = IndexPath(item: index, section: 0)
+             teamSchedule.scrollToItem(at: path, at: .centeredHorizontally, animated: true)
         } else {
             let alert = UIAlertController(
                 title: "Date Format Issue",
                 message: "Enter date in MM/DD/YY format",
-                preferredStyle: UIAlertControllerStyle.Alert
+                preferredStyle: UIAlertControllerStyle.alert
             )
-            alert.addAction(UIAlertAction(title: "Enter again", style: .Default, handler: nil))
-            self.presentViewController(alert, animated: true, completion: nil)
+            alert.addAction(UIAlertAction(title: "Enter again", style: .default, handler: nil))
+            self.present(alert, animated: true, completion: nil)
         }
         return true
     }
@@ -130,12 +169,12 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     @IBOutlet weak var textField: UITextField!
     
     
-    override func viewDidAppear(animated: Bool) {
+    override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        let index = findClosestDate(NSDate())
-        let path = NSIndexPath(forItem: index, inSection: 0)
+        let index = findClosestDate(Date())
+        let path = IndexPath(item: index, section: 0)
         if self.teamData.count > 0 {
-            teamSchedule.scrollToItemAtIndexPath(path, atScrollPosition: .CenteredHorizontally, animated: animated)
+            teamSchedule.scrollToItem(at: path, at: .centeredHorizontally, animated: animated)
         }
     }
 
@@ -153,24 +192,32 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
 
     @IBOutlet weak var teamSchedule: UICollectionView!
     
-    private func getDate(stringDate: String) -> NSDate? {
-        let formatter = NSDateFormatter()
+    fileprivate func getDate(_ stringDate: String) -> Date? {
+        let formatter = DateFormatter()
         formatter.dateFormat = "e, MMM, d"
-        let date = formatter.dateFromString(stringDate)
-        let calendar = NSCalendar.currentCalendar()
-        let dateComponents = calendar.components([NSCalendarUnit.Month, NSCalendarUnit.Day], fromDate: date!)
-        let currentYear = calendar.components([NSCalendarUnit.Year], fromDate: NSDate()).year
-        dateComponents.setValue(currentYear, forComponent: NSCalendarUnit.Year)
-        dateComponents.calendar = calendar
-        return dateComponents.date
+        let date = formatter.date(from: stringDate)
+        let calendar = Calendar.current
+        
+        let currentYear = calendar.dateComponents([.year] ,from: Date()).year
+        var dateComponents = calendar.dateComponents([.month, .day], from: date!)
+        dateComponents.setValue(currentYear, for: .year)
+        dateComponents.calendar = calendar;
+        return calendar.date(from: dateComponents)
+        
+        /**
+        let dateComponents = (calendar as NSCalendar).components([NSCalendar.Unit.month, NSCalendar.Unit.day], from: date!)
+        let currentYear = (calendar as NSCalendar).components([NSCalendar.Unit.year], from: Date()).year
+        (dateComponents as NSDateComponents).setValue(currentYear!, forComponent: NSCalendar.Unit.year)
+        (dateComponents as NSDateComponents).calendar = calendar
+         **/
     }
     
-    private func findClosestDate(selectedDate: NSDate) -> Int {
+    fileprivate func findClosestDate(_ selectedDate: Date) -> Int {
         var closestIndex = 0
         var minInterval = Double(Int.max)
         for i in 0..<teamData.count {
             let date = teamData[i].date
-            let interval = abs(date.timeIntervalSinceDate(selectedDate))
+            let interval = abs(date.timeIntervalSince(selectedDate))
             if interval < minInterval {
                 minInterval = interval
                 closestIndex = i
@@ -180,47 +227,48 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     }
     
     
-    private func assembleView() {
+    fileprivate func assembleView() {
         
-        if sportsID!.lowercaseString == "was"{
+        if sportsID!.lowercased() == "was"{
             sportsID! = "wsh"
-        } else if sportsID!.lowercaseString == "jac" {
+        } else if sportsID!.lowercased() == "jac" {
             sportsID! = "jax"
         }
     
-        let sample = NSURL(string: "http://espn.go.com/nfl/team/schedule/_/name/" + sportsID!)
-        let task = NSURLSession.sharedSession().dataTaskWithURL(sample!) {
+        let sample = URL(string: "http://espn.go.com/nfl/team/schedule/_/name/" + sportsID!)
+        let task = URLSession.shared.dataTask(with: sample!, completionHandler: {
             (data, response, error) in
             if error == nil {
-                let htmlParser = TFHpple(HTMLData: data!)
+                let htmlParser = TFHpple(htmlData: data!)
                 let query = "//table[@class='tablehead']/tr"
-                if let results = htmlParser.searchWithXPathQuery(query) as? [TFHppleElement] {
+                if let results = htmlParser?.search(withXPathQuery: query) as? [TFHppleElement] {
                     for result in results {
                         let className = result.attributes["class"] as! String
-                        if className.rangeOfString("oddrow") != nil || className.rangeOfString("evenrow") != nil {
+                        if className.range(of: "oddrow") != nil || className.range(of: "evenrow") != nil {
                             if self.teamData.count < 16 {
                                 let len = result.children.count
-                                let gameNum = result.children[0].content
+                                let gameNum = (result.children[0] as AnyObject).content
                                 if len > 2 {
                                     let regex = try! NSRegularExpression(pattern: "team\\/_\\/name\\/(\\w*)", options: [])
-                                    let raw = String(result.children[2].raw)
-                                    let match = regex.firstMatchInString(raw, options: NSMatchingOptions(rawValue: 0), range: NSMakeRange(0, raw.characters.count))
+                                    let raw = String((result.children[2] as AnyObject).raw)
+                                    let match = regex.firstMatch(in: raw!, options: NSRegularExpression.MatchingOptions(rawValue: 0), range: NSMakeRange(0, (raw?.characters.count)!))
                                     var logoName = String()
-                                    if let id = match?.rangeAtIndex(1) {
-                                        let startIndex = raw.startIndex.advancedBy((id.location))
-                                        let endIndex = startIndex.advancedBy(id.length)
-                                        logoName = raw.substringWithRange(Range<String.Index>(start: startIndex, end: endIndex))
+                                    if let id = match?.rangeAt(1) {
+                                        let startIndex = raw?.characters.index((raw?.startIndex)!, offsetBy: (id.location))
+                                        let endIndex = raw?.characters.index((raw?.startIndex)!, offsetBy: (id.location + id.length))
+                                        //let endIndex = //.index(startIndex!, offsetBy: id.length)
+                                        logoName = (raw?.substring(with: (startIndex! ..< endIndex!)))!
                                     } else {
                                         logoName = "NFL"
                                     }
                                     
-                                    let date = self.getDate(result.children[1].content)
-                                    var team = String(result.children[2].content)
-                                    if team.rangeOfString("vs") != nil {
-                                        team = team.substringFromIndex(team.startIndex.advancedBy(2))
+                                    let date = self.getDate((result.children[1] as AnyObject).content)
+                                    var team = String((result.children[2] as AnyObject).content)
+                                    if team?.range(of: "vs") != nil {
+                                        team = team?.substring(from: (team?.characters.index((team?.startIndex)!, offsetBy: 2))!)
                                     }
-                                    let score = result.children[3].content
-                                    let schedule = scheduleObject(teamName: team, weekNumber: gameNum, score: score, logoName: logoName, date: date!)
+                                    let score = (result.children[3] as AnyObject).content
+                                    let schedule = scheduleObject(teamName: team!, weekNumber: gameNum!, score: score!, logoName: logoName, date: date!)
                                     self.teamData.append(schedule)
                                 }
                             }
@@ -228,19 +276,19 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
                     }
                 }
             }
-            dispatch_async(dispatch_get_main_queue(), {
+            DispatchQueue.main.async(execute: {
                 self.teamSchedule.reloadData()
             })
-        }
+        }) 
         task.resume()
     }
     
-    func collectionView(collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return teamData.count
     }
     
-    func collectionView(collectionView: UICollectionView, cellForItemAtIndexPath indexPath: NSIndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCellWithReuseIdentifier("cell", forIndexPath: indexPath)
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "cell", for: indexPath)
         if let teamCell = cell as? TeamCollectionViewCell {
             teamCell.team.text = self.teamData[indexPath.row].teamName
             teamCell.logo.image = UIImage(named: self.teamData[indexPath.row].logoName)
@@ -250,29 +298,43 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
         return cell
     }
     
-    @IBAction func addAsFavorite(sender: UIBarButtonItem) {
-        let defaults = NSUserDefaults.standardUserDefaults()
-        if let obj = defaults.objectForKey("favorites"){
+    @IBAction func addAsFavorite(_ sender: UIBarButtonItem) {
+        let defaults = UserDefaults.standard
+        if let obj = defaults.object(forKey: "favorites"){
             var favorites = obj as! [NSObject]
-            favorites.append(sportsTeamName!)
-            defaults.setObject(favorites, forKey: "favorites")
+            favorites.append(sportsTeamName! as NSObject)
+            defaults.set(favorites, forKey: "favorites")
         } else{
-            defaults.setObject([sportsTeamName!], forKey: "favorites")
+            defaults.set([sportsTeamName!], forKey: "favorites")
         }
         sender.title = "Added"
-        sender.tintColor = UIColor.grayColor()
-        sender.enabled = false
+        sender.tintColor = UIColor.gray
+        sender.isEnabled = false
     }
     
-    @IBAction func goBack(segue: UIStoryboardSegue) {
+    @IBAction func goBack(_ segue: UIStoryboardSegue) {
         
     }
     
-    func collectionView(collectionView: UICollectionView, didSelectItemAtIndexPath indexPath: NSIndexPath) {
-        let cell = collectionView.cellForItemAtIndexPath(indexPath)
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let cell = collectionView.cellForItem(at: indexPath)
         if let collectionCell = cell as? TeamCollectionViewCell {
-            UIView.animateWithDuration(1.0, animations: {collectionCell.logo.alpha = 1.0 })
-            UIView.animateWithDuration(3.0, animations: {collectionCell.logo.alpha = 0.15 })
+            performSegue(withIdentifier: "goToChat", sender: self)
+            //UIView.animate(withDuration: 1.0, animations: {collectionCell.logo.alpha = 1.0 })
+            //UIView.animate(withDuration: 3.0, animations: {collectionCell.logo.alpha = 0.15 })
         }
     }
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        super.prepare(for: segue, sender: sender)
+        if segue.identifier == "goToChat" {
+            if let mvc = segue.destination as? MessagesViewController {
+                mvc.senderDisplayName = "Cody"
+//                mvc.channel = channel
+//                mvc.channelRef = channelRef.child(channel.id)
+            }
+        }
+    }
+
+    
 }

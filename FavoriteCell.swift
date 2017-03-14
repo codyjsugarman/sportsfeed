@@ -13,7 +13,7 @@ class FavoriteCell: UITableViewCell {
         }
     }
     
-    private func loadCell() {
+    fileprivate func loadCell() {
         teamName.text = name
     }
     

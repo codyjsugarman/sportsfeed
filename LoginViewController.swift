@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import FirebaseAuth
 import UIKit
 
 class LoginViewController: UIViewController, UITextFieldDelegate {
@@ -31,11 +32,20 @@ class LoginViewController: UIViewController, UITextFieldDelegate {
     @IBAction func loginAction(sender: AnyObject) {
         let username = self.usernameField.text
         let password = self.passwordField.text
-        if ((username?.characters.count)! < 4 || (password?.characters.count)! < 5) {
+        if ((username?.characters.count)! < 6 || (password?.characters.count)! < 6) {
             let alert = UIAlertView(title: "Invalid", message: "Username must be greater than 4 and password must be greater than 5", delegate: self, cancelButtonTitle: "OK")
             alert.show()
         } else {
-            //Create user account and redirect to main feed (also give alert saying congrats)
+            FIRAuth.auth()?.signIn(withEmail: username!, password: password!, completion: {(user, error) in
+                    if (error != nil) {
+                        print(error);
+                        return;
+                    } else{
+                        let alert = UIAlertView(title: "Success", message: "Logged in!", delegate: self, cancelButtonTitle: "OK")
+                        alert.show()
+                        self.performSegue(withIdentifier: "returnToSportsFeed", sender: self)
+                    }
+                } )
         }
     }
     

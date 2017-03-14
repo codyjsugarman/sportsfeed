@@ -12,30 +12,30 @@ class SingleSportTableViewController: UITableViewController, CLLocationManagerDe
     
     var managedObjectContext: NSManagedObjectContext? = AppDelegate.managedObjectContext
     
-    @IBAction func printTableView(sender: UIBarButtonItem) {
-        if UIPrintInteractionController.isPrintingAvailable(){
+    @IBAction func printTableView(_ sender: UIBarButtonItem) {
+        if UIPrintInteractionController.isPrintingAvailable{
             UIGraphicsBeginImageContextWithOptions(view.frame.size, true, 1.0)
-            view.layer.renderInContext(UIGraphicsGetCurrentContext()!)
+            view.layer.render(in: UIGraphicsGetCurrentContext()!)
             let image = UIGraphicsGetImageFromCurrentImageContext()
             UIGraphicsEndImageContext()
             
-            let data = UIImageJPEGRepresentation(image, 0.7)
-            if UIPrintInteractionController.canPrintData(data!){
+            let data = UIImageJPEGRepresentation(image!, 0.7)
+            if UIPrintInteractionController.canPrint(data!){
                 let printInfo = UIPrintInfo(dictionary: nil)
-                printInfo.jobName = image.description
-                printInfo.outputType = .Photo
+                printInfo.jobName = (image?.description)!
+                printInfo.outputType = .photo
                 
-                let printController = UIPrintInteractionController.sharedPrintController()
+                let printController = UIPrintInteractionController.shared
                 printController.printInfo = printInfo
                 printController.showsNumberOfCopies = false
                 printController.printingItem = image
                 
-                printController.presentAnimated(true, completionHandler: nil)
+                printController.present(animated: true, completionHandler: nil)
             }
         }
     }
 
-    private let sportsURLs: [String:String] = [
+    fileprivate let sportsURLs: [String:String] = [
         "NFL" : "http://api.sportradar.us/nfl-t1/teams/hierarchy.xml?api_key=uj5gmqyvhw76g7sgpd9s8s5k",
     ]
     
@@ -43,7 +43,7 @@ class SingleSportTableViewController: UITableViewController, CLLocationManagerDe
         didSet {
             locationManager.delegate = self
             locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
-            if CLLocationManager.authorizationStatus() == .NotDetermined {
+            if CLLocationManager.authorizationStatus() == .notDetermined {
                locationManager.requestWhenInUseAuthorization()
             }
             
@@ -53,14 +53,14 @@ class SingleSportTableViewController: UITableViewController, CLLocationManagerDe
         }
     }
     
-    private let locationManager = CLLocationManager()
-    private var currentLocation: CLLocation?
+    fileprivate let locationManager = CLLocationManager()
+    fileprivate var currentLocation: CLLocation?
     
-    func locationManager(manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         currentLocation = manager.location
     }
     
-    func locationManager(manager: CLLocationManager, didFailWithError error: NSError) {
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Error: \(error)")
     }
     
@@ -69,50 +69,53 @@ class SingleSportTableViewController: UITableViewController, CLLocationManagerDe
         var teamID: String
     }
 
-    private var sportsTeams = [[teamObject]]()
-    private var unsortedTeams = [teamObject]()
-    private
+    fileprivate var sportsTeams = [[teamObject]]()
+    fileprivate var unsortedTeams = [teamObject]()
+    fileprivate
     var recommendedTeam: teamObject?
-    private var selectedLocation = [String:CLLocation]()
+    fileprivate var selectedLocation = [String:CLLocation]()
     
     let sectionTitle = ["Recommended", "All"]
     
-    private func fetchSports() {
-        let sample = NSURL(string: sportsURLs[cSport!]!)
-        let task = NSURLSession.sharedSession().dataTaskWithURL(sample!) {
+    fileprivate func fetchSports() {
+        let sample = URL(string: sportsURLs[cSport!]!)
+        let task = URLSession.shared.dataTask(with: sample!, completionHandler: {
             (data, response, error) in
             if error == nil {
-                let htmlParser = TFHpple(HTMLData: data!)
+                let htmlParser = TFHpple(htmlData: data!)
                 let query = "//team"
-                if let results = htmlParser.searchWithXPathQuery(query) as? [TFHppleElement] {
+                if let results = htmlParser?.search(withXPathQuery: query) as? [TFHppleElement] {
                     var minDistance:CLLocationDistance = Double(Int.max)
-                    let teams = dispatch_group_create()
+                    let teams = DispatchGroup()
                     
                     for result in results {
                         let teamID = result.attributes["id"]
                         if let id = teamID as? String {
-                            let teamName = String(result.attributes["market"]!) + " " + String(result.attributes["name"]!)
-                            let addr = result.children[1]["address"] as! String
-                            let zip = result.children[1]["zip"] as! String
+                            let teamName = String(describing: result.attributes["market"]!) + " " + String(describing: result.attributes["name"]!)
+                            let elem = result.children[1] as! TFHppleElement
+                            let addr = elem["address"] as! String
+                            let zip = elem["zip"] as! String
+
                             let address = addr + ", " + zip
+                            //let address = "One Bills Drive 14127";
                             self.unsortedTeams.append(teamObject(teamName: teamName, teamID: id))
-                            dispatch_group_enter(teams)
+                            teams.enter()
                             CLGeocoder().geocodeAddressString(address, completionHandler: {
                                 (placemarks, error) -> Void in
                                 if let placemark = placemarks?[0] {
                                     self.selectedLocation[teamName] = placemark.location!
-                                    if let distance = self.currentLocation?.distanceFromLocation(placemark.location!) {
+                                    if let distance = self.currentLocation?.distance(from: placemark.location!) {
                                         if distance < minDistance {
                                             minDistance = distance
                                             self.recommendedTeam = teamObject(teamName: teamName, teamID: id)
                                         }
                                     }
                                 }
-                                dispatch_group_leave(teams)
+                                teams.leave()
                             })
                         }
                     }
-                    dispatch_group_notify(teams, dispatch_get_main_queue(), {
+                    teams.notify(queue: DispatchQueue.main, execute: {
                         if let team = self.recommendedTeam {
                             self.sportsTeams.append([team])
                         } else {
@@ -124,25 +127,25 @@ class SingleSportTableViewController: UITableViewController, CLLocationManagerDe
                 }
             }
             self.tableView.reloadData()
-        }
+        }) 
         task.resume()
     }
 
     // MARK: - Table view data source
 
-    private var selectedTeamName: String?
-    private var selectedID: String?
+    fileprivate var selectedTeamName: String?
+    fileprivate var selectedID: String?
     
-    override func numberOfSectionsInTableView(tableView: UITableView) -> Int {
+    override func numberOfSections(in tableView: UITableView) -> Int {
         return sportsTeams.count
     }
 
-    override func tableView(tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return sportsTeams[section].count
     }
     
-    override func tableView(tableView: UITableView, cellForRowAtIndexPath indexPath: NSIndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCellWithIdentifier("sportsTeam", forIndexPath: indexPath)
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "sportsTeam", for: indexPath)
         let team = sportsTeams[indexPath.section][indexPath.row]
         if let sportCell = cell as? SingleSportTableViewCell {
             sportCell.name = team.teamName
@@ -150,25 +153,25 @@ class SingleSportTableViewController: UITableViewController, CLLocationManagerDe
         return cell
     }
     
-    override func tableView(tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         return sportsTeams[section].count != 0 ? sectionTitle[section] : nil
     }
     
-    override func tableView(tableView: UITableView, heightForRowAtIndexPath indexPath: NSIndexPath) -> CGFloat {
+    override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
             return UITableViewAutomaticDimension
     }
     
-    override func tableView(tableView: UITableView, didSelectRowAtIndexPath indexPath: NSIndexPath) {
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         selectedTeamName = sportsTeams[indexPath.section][indexPath.row].teamName
         selectedID = sportsTeams[indexPath.section][indexPath.row].teamID
-        self.performSegueWithIdentifier("moveToTeamProfile", sender: self)
+        self.performSegue(withIdentifier: "moveToTeamProfile", sender: self)
     }
     
-    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "moveToTeamProfile" {
-            if let pvc = segue.destinationViewController as? ProfileViewController {
+            if let pvc = segue.destination as? ProfileViewController {
                 if let context = AppDelegate.managedObjectContext {
-                    context.performBlock{
+                    context.perform{
                         TeamData.getTeamData(self.selectedTeamName!, teamID: self.selectedID!, teamLocation: self.selectedLocation[self.selectedTeamName!]!, inManagedObjectContext: context)
                     }
                     do {
@@ -184,6 +187,10 @@ class SingleSportTableViewController: UITableViewController, CLLocationManagerDe
             }
         }
     }
-    
-    
+    /**
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated);
+        cSport = "NFL";
+    }
+    **/
 }

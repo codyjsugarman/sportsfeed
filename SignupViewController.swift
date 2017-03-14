@@ -1,4 +1,4 @@
-/
+//
 //  SignupViewController.swift
 //  Newsboard
 //
@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import FirebaseAuth
 import UIKit
 
 class SignupViewController: UIViewController, UITextFieldDelegate {
@@ -48,27 +49,36 @@ class SignupViewController: UIViewController, UITextFieldDelegate {
         alert.show()
     }
     
-    func signupNewRallyUser() {
+    func signupNewSportsFeedUser() {
         //Create new user account
-        let alert = UIAlertView(title: "Success", message: "Signed up!", delegate: self, cancelButtonTitle: "OK")
-        alert.show()
-        self.performSegue(withIdentifier: "returnToSportsFeed", sender: self)
+        FIRAuth.auth()?.createUser(withEmail: self.usernameField.text!, password: self.passwordField.text!, completion: {(user, error) in
+            if (error != nil) {
+                print(error)
+                return;
+            } else{
+                let alert = UIAlertView(title: "Success", message: "Signed up!", delegate: self, cancelButtonTitle: "OK")
+                alert.show()
+                self.performSegue(withIdentifier: "returnToSportsFeed", sender: self)
+            }
+        } )
     }
     
     @IBAction func signupAction(sender: AnyObject) {
         if (usernameExists(username: self.usernameField.text!)) {
+            let alert = UIAlertView(title: "Email exists", message: "Please enter a valid email greater than 6 characters.", delegate: self, cancelButtonTitle: "OK")
+            alert.show()
             return
         }
         
         // Username/password error checking
-        if ((self.usernameField.text?.characters.count)! < 4 || (self.passwordField.text?.characters.count)! < 5) {
-            let alert = UIAlertView(title: "Invalid Credentials", message: "Username and password must be greater than 5 characters", delegate: self, cancelButtonTitle: "OK")
+        if ((self.usernameField.text?.characters.count)! < 6 || (self.passwordField.text?.characters.count)! < 6) {
+            let alert = UIAlertView(title: "Invalid Credentials", message: "Username and password must be greater than 6 characters", delegate: self, cancelButtonTitle: "OK")
             alert.show()
             return
             
             //Successful signup
         } else {
-            signupNewRallyUser()
+            signupNewSportsFeedUser()
         }
     }
 }

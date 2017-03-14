@@ -13,7 +13,7 @@ class SingleSportTableViewCell: UITableViewCell {
         }
     }
     
-    private func loadCell() {
+    fileprivate func loadCell() {
         sportsName.text = name
     }
     

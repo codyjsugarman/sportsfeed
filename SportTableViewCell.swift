@@ -14,7 +14,7 @@ class SportTableViewCell: UITableViewCell {
         }
     }
     
-    private func loadCell() {
+    fileprivate func loadCell() {
         sportsName.text = name
         sportsLogo.image = UIImage(named: name!)
     }

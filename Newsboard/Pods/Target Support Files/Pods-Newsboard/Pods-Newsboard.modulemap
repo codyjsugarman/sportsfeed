@@ -1,0 +1,6 @@
+framework module Pods_Newsboard {
+  umbrella header "Pods-Newsboard-umbrella.h"
+
+  export *
+  module * { export * }
+}

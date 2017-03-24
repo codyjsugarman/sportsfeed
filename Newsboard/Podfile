@@ -6,12 +6,12 @@ target 'Newsboard' do
   use_frameworks!
 
   # Pods for Newsboard
-   pod ‘Firebase’
-   pod ‘Firebase/Core’
-   pod ‘Firebase/Auth’
-   pod ‘Firebase/Database’
-   pod 'Firebase/Storage'
-   pod 'JSQMessagesViewController'
+  pod ‘Firebase’
+  pod ‘Firebase/Core’
+  pod ‘Firebase/Auth’
+  pod ‘Firebase/Database’
+  pod 'Firebase/Storage'
+  pod 'JSQMessagesViewController'
 
   target 'NewsboardTests' do
     inherit! :search_paths

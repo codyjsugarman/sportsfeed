@@ -13,40 +13,14 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     
     var teamData = [scheduleObject]()
     
-    private lazy var channelRef: FIRDatabaseReference = FIRDatabase.database().reference().child("channels")
-    private var channelRefHandle: FIRDatabaseHandle?
+    var rootRef = FIRDatabase.database().reference()
+    private lazy var usersRef: FIRDatabaseReference = self.rootRef.child("users")
+    private lazy var teamsRef: FIRDatabaseReference = self.rootRef.child("teams")
     
     // MARK: Properties
     var senderDisplayName: String? // 1
     var newChannelTextField: UITextField? // 2
 //    private var channels: [Channel] = [] // 3
-    
-    private var channels = [Channel(id: "TEST", name: "CODY")]
-    
-    enum Section: Int {
-        case createNewChannelSection = 0
-        case currentChannelsSection
-    }
-    
-    deinit {
-        if let refHandle = channelRefHandle {
-            channelRef.removeObserver(withHandle: refHandle)
-        }
-    }
-    
-    private func observeChannels() {
-        // Use the observe method to listen for new
-        // channels being written to the Firebase DB
-        channelRefHandle = channelRef.observe(.childAdded, with: { (snapshot) -> Void in // 1
-            let channelData = snapshot.value as! Dictionary<String, AnyObject> // 2
-            let id = snapshot.key
-            if let name = channelData["name"] as! String!, name.characters.count > 0 { // 3
-                self.channels.append(Channel(id: id, name: name))
-            } else {
-                print("Error! Could not decode channel data")
-            }
-        })
-    }
 
     
     struct scheduleObject {
@@ -69,7 +43,7 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        observeChannels()
+        //observeChannels()
         self.automaticallyAdjustsScrollViewInsets = false
         textField.delegate = self
         sportsTeam.text = sportsTeamName
@@ -85,15 +59,40 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
         if let obj = defaults.object(forKey: "favorites"){
             let favorites = obj as! [NSObject]
             if favorites.contains(sportsTeamName! as NSObject){
-                self.navigationItem.rightBarButtonItem?.title = "Added"
-                self.navigationItem.rightBarButtonItem?.isEnabled = false
-                self.navigationItem.rightBarButtonItem?.tintColor = UIColor.gray
+                self.navigationItem.rightBarButtonItem?.title = "Remove"
+                //self.navigationItem.rightBarButtonItem?.isEnabled = false
+                //self.navigationItem.rightBarButtonItem?.tintColor = UIColor.gray
             }
         }
+        // Code taken from stack overflow tutorial- http://stackoverflow.com/questions/37875973/how-to-write-keyboard-notifications-in-swift-3
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: .UIKeyboardWillShow, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name:.UIKeyboardWillHide, object: nil)
+    }
+    
+    deinit {
+         NotificationCenter.default.removeObserver(self)
     }
     
     @IBOutlet weak var teamImage: UIImageView!
  
+    func keyboardWillShow(notification: NSNotification) {
+        
+        if let keyboardSize = (notification.userInfo?[UIKeyboardFrameBeginUserInfoKey] as? NSValue)?.cgRectValue {
+            if self.view.frame.origin.y == 0{
+                self.view.frame.origin.y -= keyboardSize.height
+            }
+        }
+        
+    }
+    
+    func keyboardWillHide(notification: NSNotification) {
+        if let keyboardSize = (notification.userInfo?[UIKeyboardFrameBeginUserInfoKey] as? NSValue)?.cgRectValue {
+            if self.view.frame.origin.y != 0{
+                self.view.frame.origin.y += keyboardSize.height
+            }
+        }
+    }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         currentLocation = manager.location
@@ -188,6 +187,8 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     
     var sportsID: String?
     
+    var opposingTeam: String?
+    
     var teamLocation: CLLocation?
 
     @IBOutlet weak var teamSchedule: UICollectionView!
@@ -198,7 +199,7 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
         let date = formatter.date(from: stringDate)
         let calendar = Calendar.current
         
-        let currentYear = calendar.dateComponents([.year] ,from: Date()).year
+        let currentYear = calendar.dateComponents([.year] ,from: Date()).year! - 1
         var dateComponents = calendar.dateComponents([.month, .day], from: date!)
         dateComponents.setValue(currentYear, for: .year)
         dateComponents.calendar = calendar;
@@ -300,26 +301,70 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     
     @IBAction func addAsFavorite(_ sender: UIBarButtonItem) {
         let defaults = UserDefaults.standard
-        if let obj = defaults.object(forKey: "favorites"){
-            var favorites = obj as! [NSObject]
-            favorites.append(sportsTeamName! as NSObject)
-            defaults.set(favorites, forKey: "favorites")
-        } else{
-            defaults.set([sportsTeamName!], forKey: "favorites")
+        if (sender.title == "Add") {
+            let defaults = UserDefaults.standard
+            if let obj = defaults.object(forKey: "favorites"){
+                var favorites = obj as! [NSObject]
+                favorites.append(sportsTeamName! as NSObject)
+                defaults.set(favorites, forKey: "favorites")
+            } else{
+                defaults.set([sportsTeamName!], forKey: "favorites")
+            }
+            if let obj = defaults.object(forKey: "favoriteID"){
+                var favoriteID = obj as! [NSObject]
+                favoriteID.append(sportsID! as NSObject)
+                defaults.set(favoriteID, forKey: "favoriteID")
+            } else{
+                defaults.set([sportsID!], forKey: "favoriteID")
+            }
+            let teamRef = self.teamsRef.childByAutoId() // 1
+            let teamItem = [ // 2
+                "userId": FIRAuth.auth()?.currentUser?.uid,
+                "teamID": sportsID!,
+                "teamName": sportsTeamName!
+            ]
+            teamRef.setValue(teamItem)
+            sender.title = "Remove"
+        } else {
+            if let obj = defaults.object(forKey: "favorites"){
+                var searchArray = obj as? [String]
+                let index = searchArray?.index(of: sportsTeamName!)
+                searchArray?.remove(at: index!)
+                defaults.set(searchArray, forKey: "favorites")
+            }
+            if let obj = defaults.object(forKey: "favoriteID"){
+                var searchIDArray = obj as? [String]
+                let index = searchIDArray?.index(of: sportsID!)
+                searchIDArray?.remove(at: index!)
+                defaults.set(searchIDArray, forKey: "favoriteID")
+            }
+            sender.title = "Add"
         }
+       
+        /**
         sender.title = "Added"
+        let teamRef = self.teamsRef.childByAutoId() // 1
+        let teamItem = [ // 2
+            "userId": FIRAuth.auth()?.currentUser?.uid,
+            "teamID": sportsID!,
+            "teamName": sportsTeamName!
+        ]
+        teamRef.setValue(teamItem)
         sender.tintColor = UIColor.gray
         sender.isEnabled = false
+         **/
     }
     
     @IBAction func goBack(_ segue: UIStoryboardSegue) {
         
     }
     
+    
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         let cell = collectionView.cellForItem(at: indexPath)
         if let collectionCell = cell as? TeamCollectionViewCell {
-            performSegue(withIdentifier: "goToChat", sender: self)
+            opposingTeam = collectionCell.team.text!
+            performSegue(withIdentifier: "goToThread", sender: self)
             //UIView.animate(withDuration: 1.0, animations: {collectionCell.logo.alpha = 1.0 })
             //UIView.animate(withDuration: 3.0, animations: {collectionCell.logo.alpha = 0.15 })
         }
@@ -327,11 +372,26 @@ class ProfileViewController: UIViewController, UICollectionViewDataSource, UICol
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         super.prepare(for: segue, sender: sender)
-        if segue.identifier == "goToChat" {
-            if let mvc = segue.destination as? MessagesViewController {
-                mvc.senderDisplayName = "Cody"
-//                mvc.channel = channel
-//                mvc.channelRef = channelRef.child(channel.id)
+        if segue.identifier == "goToThread" {
+            if let nvc = segue.destination as? UINavigationController {
+                nvc.title = sportsTeamName! + opposingTeam!
+                let mvc = nvc.topViewController as! GameThreadViewController
+                mvc.teamOne = sportsTeamName
+                mvc.teamTwo = opposingTeam
+                
+                
+                let userQuery = usersRef.queryOrdered(byChild: "userID")
+                let userRefHandle = userQuery.observe(.childAdded, with: { (snapshot) -> Void in
+                    print(snapshot.value)
+                    let userData = snapshot.value as! Dictionary<String, String>
+                    if let id = userData["userId"] as String! {
+                        if id == FIRAuth.auth()?.currentUser?.uid {
+                            mvc.senderDisplayName = userData["username"]
+                            return
+                        }
+                    }
+                })
+                mvc.senderDisplayName = "Test"
             }
         }
     }

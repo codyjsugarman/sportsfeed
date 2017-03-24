@@ -9,18 +9,20 @@ import MessageUI
 import CoreLocation
 import CoreData
 import FirebaseAuth
+import FirebaseDatabase
 
-class SportsFeedTableViewController: UITableViewController, MFMessageComposeViewControllerDelegate {
+class SportsFeedTableViewController: UITableViewController {
 
     var searchArray: [String]?
     var managedObjectContext: NSManagedObjectContext? = AppDelegate.managedObjectContext
+    //var rootRef = FIRDatabase.database().reference()
+    //private lazy var teamsRef: FIRDatabaseReference = self.rootRef.child("teams")
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         let defaults = UserDefaults.standard
         if let obj = defaults.object(forKey: "favorites") {
             searchArray = obj as? [String]
-            
         } else {
             searchArray = ["Add some favorite teams"]
         }
@@ -46,56 +48,7 @@ class SportsFeedTableViewController: UITableViewController, MFMessageComposeView
         return searchArray!.count
     }
     
-    func messageComposeViewController(_ controller: MFMessageComposeViewController, didFinishWith result: MessageComposeResult) {
-        if result.rawValue == MessageComposeResult.cancelled.rawValue || result.rawValue == MessageComposeResult.failed.rawValue ||  result.rawValue == MessageComposeResult.sent.rawValue {
-            self.dismiss(animated: true, completion: nil)
-        } 
-    }
-    
-    
-    @IBAction func saveContentsAsFile(_ sender: UIBarButtonItem) {
-        let docDirectory = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
-        let filePath = docDirectory + "\\Favorite_Teams"
-        let manager = FileManager.default
-        let data = NSMutableData()
-        for string in searchArray! {
-            data.append(string.data(using: String.Encoding.utf8)!)
-        }
-        if manager.fileExists(atPath: filePath) {
-            try! manager.removeItem(atPath: filePath)
-            manager.createFile(atPath: filePath, contents: data as Data, attributes: nil)
-        } else {
-            manager.createFile(atPath: filePath, contents: data as Data, attributes: nil)
-        }
-        
-        if MFMessageComposeViewController.canSendText(){
-            if MFMessageComposeViewController.canSendAttachments() {
-                let message = MFMessageComposeViewController()
-                message.messageComposeDelegate = self
-                message.recipients = ["4143392150"] // MY PHONE NUMBER
-                message.body = "My favorite teams are attached: "
-                if message.addAttachmentData(data as Data, typeIdentifier: "public.data", filename: "Favorite_Teams") {
-                    self.present(message, animated: true, completion: nil)
-                }
-            }
-            else {
-                presentErrorAlert("Unable to text attachment")
-            }
-        } else {
-            presentErrorAlert("Unable to text on device")
-        }
-    }
-    
-    func presentErrorAlert(_ text: String){
-        let alert = UIAlertController(
-            title: text,
-            message: ":(",
-            preferredStyle: UIAlertControllerStyle.alert
-        )
-        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        self.present(alert, animated: true, completion: nil)
-    }
-    
+
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "favorite", for: indexPath)
         let name = searchArray![indexPath.row]
